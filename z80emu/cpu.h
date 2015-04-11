@@ -87,7 +87,7 @@ private:
 	inline void resetHC();
 	inline void setHC();
 	 
-	inline void updateParity(short reg);
+	inline void updateParity(char reg);
 	inline void resetParity();
 	inline void setParity();
 

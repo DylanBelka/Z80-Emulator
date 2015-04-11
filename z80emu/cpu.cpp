@@ -10,11 +10,11 @@ have a separate branch
 */
 
 // change these to fit the system being emulated
-#define ROM_START 0
+#define ROM_START 0x100
 #define MAX_ROM_SIZE 0x7FFF
 #define MEM_SIZE 65535
 #define PROGRAM_START 0
-#define SP_START 0 // decremented on push to roll over
+#define SP_START 0xFFFE
 
 #define ADD true
 #define SUB false
@@ -24,6 +24,7 @@ const std::string toHex(int);
 CPU::CPU()
 {
 	A = B = C = D = E = H = L = 0;
+	R = 0;
 	SP = SP_START;
 	PC = PROGRAM_START; 
 	mem = new char[MEM_SIZE];
@@ -36,7 +37,7 @@ CPU::~CPU()
 
 void CPU::updateCarry(short reg)
 {
-	F |= (reg > 255) ? 0x1 : F;
+	F |= (reg > 0xFF || reg < 0x00) ? 0x1 : F;
 }
 
 void CPU::resetCarry()
@@ -52,7 +53,7 @@ void CPU::setCarry()
 // ^^^
 void CPU::updateHC(short reg)
 {
-	// TODO: Implement half carry
+	F |= (reg > 0xF) ? 0x10 : F;
 }
 
 void CPU::resetHC()
@@ -67,7 +68,8 @@ void CPU::setHC()
 
 void CPU::updateN(bool add)
 {
-	F |= (add) ? 0x2 : F;
+	if (add) { F |= 0x2; }
+	else { F &= 0xFD; }
 }
 
 void CPU::resetN()
@@ -86,7 +88,7 @@ void CPU::updateOverflow(short reg)
 }
 
 void CPU::resetOverflow()
-{
+{	
 	F &= 0xFB;
 }
 
@@ -95,9 +97,12 @@ void CPU::setOverflow()
 	F |= 0x4;
 }
 
-void CPU::updateParity(short reg)
+void CPU::updateParity(char reg)
 {
-	F |= (reg & 0x80) ? 0x4 : F;
+	bool parity =
+		(((reg * 0x0101010101010101ULL) & 0x8040201008040201ULL) % 0x1FF) & 1; // https://graphics.stanford.edu/~seander/bithacks.html#ParityNaive 
+																				// (uses Compute parity of a byte using 64-bit multiply and modulus division)
+	F |= (!parity) ? 0x4 : F;
 }
 
 void CPU::resetParity()
@@ -234,7 +239,6 @@ void CPU::call(bool cond)
 	}
 }
 
-//  ^^^ increment PC after?
 void CPU::rst(unsigned char mode)
 {
 	mem[SP] = PC + 1;
@@ -278,14 +282,22 @@ void CPU::test()
 		std::cout << toHex((int)opcode) << std::endl;
 	}
 	*/
-	std::cout << (int)BC() << std::endl;
-	std::cout << (int)HL() << std::endl;
-	std::cout << (int)A << std::endl;
+	std::cout << "A: " << (int)A << std::endl;
+	std::cout << "B: " << (int)B << std::endl;
+	std::cout << "C: " << (int)C << std::endl;
+	std::cout << "D: " << (int)D << std::endl;
+	std::cout << "E: " << (int)E << std::endl;
+	std::cout << "F: " << toHex(F) << std::endl;
+	std::cout << "AF: " << AF() << std::endl;
+	std::cout << "BC: " << BC() << std::endl;
+	std::cout << "DE: " << DE() << std::endl;
+	std::cout << "HL: " << HL() << std::endl;
 }
 
 void CPU::emulateCycle()
 {
 	unsigned char opcode = mem[PC];
+	R++; // I think this is what R does
 	std::cout << toHex((int)opcode) << "\tat " << toHex((int)PC) << std::endl;
 	//std::cout << toHex(PC) << std::endl;
 	switch (opcode)
@@ -805,7 +817,7 @@ void CPU::emulateCycle()
 		}
 		case 0x3F: // ccf
 		{
-			F &= 0x1;
+			F ^= 0x1;
 			PC++;
 			break;
 		}
@@ -1382,7 +1394,7 @@ void CPU::emulateCycle()
 		{
 			A -= B;
 			updateCarry(A);
-			updateN(ADD);
+			updateN(SUB);
 			updateOverflow(A);
 			updateHC(A);
 			updateZero(A);
@@ -1394,7 +1406,7 @@ void CPU::emulateCycle()
 		{
 			A -= C;
 			updateCarry(A);
-			updateN(ADD);
+			updateN(SUB);
 			updateOverflow(A);
 			updateHC(A);
 			updateZero(A);
@@ -1406,7 +1418,7 @@ void CPU::emulateCycle()
 		{
 			A -= D;
 			updateCarry(A);
-			updateN(ADD);
+			updateN(SUB);
 			updateOverflow(A);
 			updateHC(A);
 			updateZero(A);
@@ -1418,7 +1430,7 @@ void CPU::emulateCycle()
 		{
 			A -= E;
 			updateCarry(A);
-			updateN(ADD);
+			updateN(SUB);
 			updateOverflow(A);
 			updateHC(A);
 			updateZero(A);
@@ -1430,7 +1442,7 @@ void CPU::emulateCycle()
 		{
 			A -= H;
 			updateCarry(A);
-			updateN(ADD);
+			updateN(SUB);
 			updateOverflow(A);
 			updateHC(A);
 			updateZero(A);
@@ -1442,7 +1454,7 @@ void CPU::emulateCycle()
 		{
 			A -= L;
 			updateCarry(A);
-			updateN(ADD);
+			updateN(SUB);
 			updateOverflow(A);
 			updateHC(A);
 			updateZero(A);
@@ -1454,7 +1466,7 @@ void CPU::emulateCycle()
 		{
 			A -= mem[HL()];
 			updateCarry(A);
-			updateN(ADD);
+			updateN(SUB);
 			updateOverflow(A);
 			updateHC(A);
 			updateZero(A);
@@ -1466,7 +1478,7 @@ void CPU::emulateCycle()
 		{
 			A -= A;
 			updateCarry(A);
-			updateN(ADD);
+			updateN(SUB);
 			updateOverflow(A);
 			updateHC(A);
 			updateZero(A);
@@ -1478,7 +1490,7 @@ void CPU::emulateCycle()
 		{
 			A -= B - carry();
 			updateCarry(A);
-			updateN(ADD);
+			updateN(SUB);
 			updateOverflow(A);
 			updateHC(A);
 			updateZero(A);
@@ -1490,7 +1502,7 @@ void CPU::emulateCycle()
 		{
 			A -= C - carry();
 			updateCarry(A);
-			updateN(ADD);
+			updateN(SUB);
 			updateOverflow(A);
 			updateHC(A);
 			updateZero(A);
@@ -1502,7 +1514,7 @@ void CPU::emulateCycle()
 		{
 			A -= D - carry();
 			updateCarry(A);
-			updateN(ADD);
+			updateN(SUB);
 			updateOverflow(A);
 			updateHC(A);
 			updateZero(A);
@@ -1514,7 +1526,7 @@ void CPU::emulateCycle()
 		{
 			A -= E - carry();
 			updateCarry(A);
-			updateN(ADD);
+			updateN(SUB);
 			updateOverflow(A);
 			updateHC(A);
 			updateZero(A);
@@ -1526,7 +1538,7 @@ void CPU::emulateCycle()
 		{
 			A -= H - carry();
 			updateCarry(A);
-			updateN(ADD);
+			updateN(SUB);
 			updateOverflow(A);
 			updateHC(A);
 			updateZero(A);
@@ -1538,7 +1550,7 @@ void CPU::emulateCycle()
 		{
 			A -= L - carry();
 			updateCarry(A);
-			updateN(ADD);
+			updateN(SUB);
 			updateOverflow(A);
 			updateHC(A);
 			updateZero(A);
@@ -1550,7 +1562,7 @@ void CPU::emulateCycle()
 		{
 			A -= mem[HL()] - carry();
 			updateCarry(A);
-			updateN(ADD);
+			updateN(SUB);
 			updateOverflow(A);
 			updateHC(A);
 			updateZero(A);
@@ -1562,7 +1574,7 @@ void CPU::emulateCycle()
 		{
 			A -= A - carry();
 			updateCarry(A);
-			updateN(ADD);
+			updateN(SUB);
 			updateOverflow(A);
 			updateHC(A);
 			updateZero(A);
@@ -2027,7 +2039,7 @@ void CPU::emulateCycle()
 			jp(!carry(), get16(), 3);
 			break;
 		}
-		case 0xD3: // out (*), a
+		case 0xD3: // out (*), a ~!GB
 		{
 			ports[mem[PC + 1]] = A;
 			PC += 2;
@@ -2080,7 +2092,7 @@ void CPU::emulateCycle()
 			break;
 		
 		}
-		case 0xDB: // in a, (*)
+		case 0xDB: // in a, (*) ~!GB
 		{
 			A = ports[mem[PC + 1]];
 			PC += 2;
@@ -2091,7 +2103,7 @@ void CPU::emulateCycle()
 			call(carry());
 			break;
 		}
-		case 0xDD: // IX INSTRUCTIONS
+		case 0xDD: // IX INSTRUCTIONS ~!GB
 		{
 			decodeIXInstruction(opcode);
 			PC++;
@@ -2133,7 +2145,7 @@ void CPU::emulateCycle()
 			jp(!overflow(), get16(), 3);
 			break;
 		}
-		case 0xE3: // ex (sp), hl ~!GB?
+		case 0xE3: // ex (sp), hl ~!GB
 		{
 			const short sp = SP; 
 			SP = ((L >> 8) & 0xFF);
@@ -2190,7 +2202,7 @@ void CPU::emulateCycle()
 			jp(overflow(), get16(), 3);
 			break;
 		}
-		case 0xEB: // ex de, hl ~!GB?
+		case 0xEB: // ex de, hl ~!GB
 		{
 			const short de = DE();
 			DE(HL()); // swap de = hl
@@ -2203,7 +2215,7 @@ void CPU::emulateCycle()
 			call(overflow());
 			break;
 		}
-		case 0xED: // EXTENDED INSTRUCTIONS
+		case 0xED: // EXTENDED INSTRUCTIONS ~!GB
 		{
 			decodeExtendedInstruction(opcode);
 			PC++;
@@ -2226,7 +2238,7 @@ void CPU::emulateCycle()
 			rst(0x28);
 			break;
 		}
-		case 0xF0: // ret p
+		case 0xF0: // ret p !~GB
 		{
 			ret(overflow());
 			break;
@@ -2308,7 +2320,7 @@ void CPU::emulateCycle()
 			call(sign());
 			break;
 		}
-		case 0xFD: // IY INSTRUCTIONS
+		case 0xFD: // IY INSTRUCTIONS ~!GB
 		{
 			decodeIYInstruction(opcode);
 			PC++;
@@ -2323,6 +2335,12 @@ void CPU::emulateCycle()
 		case 0xFF: // rst 0x38
 		{
 			rst(0x38);
+			PC++;
+			break;
+		}
+		default: // just in case the definition of a char changes
+		{
+			std::cout << "You should never ever see this" << std::endl;
 			PC++;
 			break;
 		}
