@@ -1,0 +1,11 @@
+.NOLIST
+#define B_CALL(xxxx) rst 28h \ .dw xxxx
+#include "ti83plus.inc"
+
+#define  ProgStart    			$9D95
+
+.LIST
+.org 	0
+.db    t2ByteTok, tasmCmp
+main:
+	
