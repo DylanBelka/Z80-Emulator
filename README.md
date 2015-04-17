@@ -1,3 +1,3 @@
 # Z80-Emulator
 
-A very simple interpreted z80 emulator
+A very basic and buggy interpreted z80 emulator
